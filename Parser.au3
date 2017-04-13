@@ -150,7 +150,7 @@ Func ParseFunctionName($CommentBlock, $Declaration)
 		EndIf
 		$ReturnArray[0] = $FunctionNameFromComment
 	ElseIf $FunctionNameFromDec Then
-		FileWrite($Log, "CAUTION: No data matching @function found in block, inferring the function name from its declaration : "& $FunctionNameFromDec & @CRLF)
+		;FileWrite($Log, "CAUTION: No data matching @function found in block, inferring the function name from its declaration : "& $FunctionNameFromDec & @CRLF)
 		$ReturnArray[0] = $FunctionNameFromDec
 	Else
 		$ReturnArray[0] = ""
@@ -178,7 +178,7 @@ Func ParseFunctionName($CommentBlock, $Declaration)
 		EndIf
 		$ReturnArray[1] = $TypeFromComment
 	ElseIf $TypeFromDec Then
-		FileWrite($Log, "CAUTION: No function type found in block, inferring the function type from its declaration : "& $TypeFromDec & @CRLF)
+		;FileWrite($Log, "CAUTION: No function type found in block, inferring the function type from its declaration : "& $TypeFromDec & @CRLF)
 		$ReturnArray[1] = $TypeFromDec
 	Else
 		$ReturnArray[0] = ""

@@ -9,10 +9,10 @@ Func AddNode($Kind, $Module ,$Node, $Parent, $File, $CarretPos)
 		$Module = " "
 		$Parent = " "
 	EndIf
-	FileWrite($DataFile, "@K="&$Kind&", @M="&$Module&", @N="&$Node&", @P="&$Parent&", @F="&$File&", @C="&$CarretPos&@CRLF)
+	FileWrite($DataFile, "@K="&$Kind&", @M="&$Module&", @N="&$Node&", @P="&$Parent&", @F="&$File&", @C="&$CarretPos&","&@CRLF)
 EndFunc
 
-; Get the parent of a node
+; Search node by name and returns one data
 Func GetData($Node, $Data)
 	FileSetPos($DataFile, 0, $FILE_BEGIN)
 	Local $CurrentLine = ""
@@ -22,8 +22,6 @@ Func GetData($Node, $Data)
 	Switch $Data
 		Case "kind"
 			$Regex = "\@K=(.+?),"
-		Case "name"
-			$Regex = "\@N=(.+?),"
 		Case "parent"
 			$Regex = "\@P=(.+?),"
 		Case "file"
@@ -38,11 +36,13 @@ Func GetData($Node, $Data)
 			Return ""
 			ExitLoop
 		EndIf
-		$CurrentData = StringRegExp($CurrentLine, $Regex, $STR_REGEXPARRAYMATCH)
+		$CurrentData = StringRegExp($CurrentLine, "\@N=(.+?),", $STR_REGEXPARRAYMATCH)
 
-	Until $Node == $CurrentData[2]
-	Return $CurrentData[1]
+	Until $Node == $CurrentData[0]
+	$CurrentData = StringRegExp($CurrentLine, $Regex, $STR_REGEXPARRAYMATCH)
+	Return $CurrentData[0]
 EndFunc
+
 
 ; Returns an array of parent nodes, up to the root, starting with the root
 Func GetParents($Node)
@@ -55,6 +55,13 @@ Func GetParents($Node)
 		$ParentsArray[$NbOfParents-1] = $CurrentParent
 
 		$CurrentParent = GetData($CurrentParent, "parent")
+		If $CurrentParent == "" Then
+			FileWrite($Log, "ERROR : Couldn't find "&$ParentsArray[$NbOfParents-1]&"'s parent !")
+			$CurrentParent = "ERROR !"
+			ReDim $ParentsArray[$NbOfParents]
+			$ParentsArray[$NbOfParents-1] = $CurrentParent
+			ExitLoop
+		EndIf
 		$NbOfParents += 1
 	WEnd
 
@@ -62,6 +69,8 @@ Func GetParents($Node)
 	_ArrayDelete($ParentsArray, $NbOfParents)
 	Return $ParentsArray
 EndFunc
+
+
 
 Func DataSort()
 	Local $SortedDataFile = FileOpen(@ScriptDir & "\TreeHierarchySorted.csv", $FO_OVERWRITE)
