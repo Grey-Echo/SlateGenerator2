@@ -151,3 +151,24 @@ Func DataSort()
 	FileClose($DataFile)
 	$DataFile = $SortedDataFile
 EndFunc
+
+
+Func FindInFunctionList($String)
+	Local $Line = ""
+	Local $TempStringArray
+	FileSetPos($FunctionList, 0, $FILE_BEGIN)
+	;FileWrite($Log, 'Trying to find the function prototype for : ' & $String & @CRLF)
+	While 1
+		$Line = FileReadLine($FunctionList)
+		If @error = -1 Then
+			SetError(0)
+			FileWrite($Log, "ERROR : Couldn't find " & $String & " in file. Does this method exitsts ?" & @CRLF)
+			Return $String
+		EndIf
+		If StringInStr($Line, $String) Then
+			$TempStringArray = StringSplit($Line, "-")
+			$Line = "[" & $TempStringArray[1] & ":" & $TempStringArray[2] & "()]" & '(#' & StringLower($Line) & ')'
+			Return $Line
+		EndIf
+	WEnd
+EndFunc

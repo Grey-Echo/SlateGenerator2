@@ -6,7 +6,7 @@
 #include <File.au3>
 
 Global $SourceFolder = $CmdLine[1] ;"./Results"
-Global $OutputFolder = $CmdLine[2] ;@ScriptDir&"/source/index.html.md"
+Global $OutputFolder = $CmdLine[2] ;"@ScriptDir&"/source/index.html.md"
 
 Global $Log = FileOpen(@ScriptDir & "\SlateGenerator2.log", 2)
 Global $DataFile = FileOpen(@ScriptDir & "\TreeHierarchy.csv", 2)
@@ -176,6 +176,55 @@ While True
 
 	FileClose($CurrentFile)
 Wend
+ConsoleWrite("Done"&@CRLF)
+
+ConsoleWrite("4. Processing Hyperlinks...")
+FileWrite($Log, @CRLF&@CRLF&@TAB&"INFO : Processing Hyperlinks" & @CRLF)
+Local $i=1
+Local $TempFilesArray = _FileListToArray(@ScriptDir & "/TEMP")
+Local $CurrentFile
+Local $FinalFile
+While $i <= $TempFilesArray[0]
+	$CurrentFile = FileOpen(@ScriptDir & "/TEMP/" & $TempFilesArray[$i], 0)
+	$FinalString = ReplaceHyperlinks($CurrentFile)
+	$FinalFile = FileOpen($OutputFolder & "/includes/" & $TempFilesArray[$i], 2)
+	FileWrite($FinalFile, $FinalString)
+	FileClose($FinalFile)
+	FileClose($CurrentFile)
+	$i += 1
+WEnd
+ConsoleWrite("Done"&@CRLF)
+
+
+ConsoleWrite("5. Adding new documentation to index...")
+FileWrite($Log, @CRLF&@CRLF&@TAB&"INFO : Adding new documentation to index" & @CRLF)
+
+Local $IndexFile = $OutputFolder&"/index.html.md"
+Local $IndexFileHandle = FileOpen($IndexFile, 0)
+Local $IndexString = FileRead($IndexFileHandle)
+$IndexString = StringRegExpReplace($IndexString, "-\h[A-Z][a-z]+\.[A-Z][a-z]+\s", "")
+
+Local $SearchPos = StringInStr($IndexString, "search:")
+local $BeforeString = StringTrimRight($IndexString, StringLen($IndexString) - $SearchPos + 5)
+local $AfterString = StringTrimLeft($IndexString, $SearchPos - 1)
+
+FileClose($IndexFileHandle)
+$IndexFileHandle = FileOpen($IndexFile, 2) ; reopening it wiping everything
+
+FileWrite($IndexFileHandle, $BeforeString)
+Local $IncludePos = StringInStr($IndexString, "includes:")
+FileSetPos($IndexFileHandle, $IncludePos + 10, $FILE_BEGIN)
+
+$i = 1
+While $i <= $TempFilesArray[0]
+	FileWrite($Log, StringTrimRight($TempFilesArray[$i], 3)&@CRLF)
+
+	FileWrite($IndexFileHandle, "  - "&StringTrimRight($TempFilesArray[$i], 3)&@CRLF)
+	$i+=1
+WEnd
+FileWrite($IndexFileHandle, @CRLF)
+FileWrite($IndexFileHandle, $AfterString)
+FileClose($IndexFileHandle)
 ConsoleWrite("Done"&@CRLF)
 
 ExitCleanly()
