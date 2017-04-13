@@ -1,5 +1,6 @@
 *.log
 *.csv
+*.txt
 Output/
 Sources/
 TEMP/

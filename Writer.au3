@@ -1,18 +1,21 @@
 ; Takes an array and returns it in a markdown flavored list
 Func ArrayToList($Array)
 	$String = ""
-	For $i = 0 To UBound($Array) - 3 Step 3
+	$i = 0
+	do
 		$String &= "* "
 		$String &= $Array[$i] & " "
 		$String &= $Array[$i + 1]
-		If $Array[$i + 2] <> "" And $Array[$i + 2] <> " " And $Array[$i + 2] <> 0  Then
-			$String &= " : " & $Array[$i + 2] & @CRLF
-		Else
+		If $Array[$i + 2] == "" or $Array[$i + 2] == " " Then
 			$String &= @CRLF
+		Else
+			$String &= " : " & $Array[$i + 2] & @CRLF
 		EndIf
-	Next
+		$i += 3
+	Until $i >= UBound($Array)
 	Return $String
 EndFunc
+
 
 Func WriteModule($Block, $Group)
 	Local $ModuleName = ParseForOneTag($Block, "@module")
@@ -21,7 +24,6 @@ Func WriteModule($Block, $Group)
 	Local $Data = ""
 	Local $DataPos = 1
 
-	ConsoleWrite("Writing "&$Group & "." & $ModuleName & ".md" &@CRLF)
 	FileWrite($Log, @CRLF&@TAB&"Writing "&$Group & "." & $ModuleName & ".md" &@CRLF)
 	FileWrite($Log, "Writing Module "&$ModuleName&@CRLF)
 
@@ -102,10 +104,87 @@ Func WriteType($Block, $ModuleName, $Output)
 	EndIf
 
 	; Add the Attributes
-	If $Fields <> "" Then
+	If IsArray($Fields) Then
 		FileWrite($Output, "#### Attributes" & @CRLF & @CRLF)
 		FileWrite($Output, ArrayToList($Fields) & @CRLF)
 	EndIf
 	Return $TypeName
 EndFunc
 
+
+
+Func WriteFunction($Block, $Declaration, $Output)
+	Local $RegexResult = ParseFunctionName($Block, $Declaration)
+	Local $FunctionName = $RegexResult[0]
+	Local $TypeName = $RegexResult[1]
+	Local $Parameters = ParseParams($Block, $Declaration)
+	Local $Returns = ParseForTags($Block, "@return")
+	Local $Usage = ParseForOneTag($Block, "@usage")
+	Local $RegexResult
+
+	FileWrite($Log, "Writing Function "&$FunctionName&@CRLF)
+
+	If StringLeft($FunctionName, 1) == "_" Then
+		_FileWriteLog($Log, @TAB&@Tab&"Function is private. Ignored." & @CRLF)
+		Return $FunctionName
+	EndIf
+	; Add the class before the function name
+	If IsArray($Parameters)  Then
+		If $Parameters[1] == "self" Then
+			$FunctionName = $TypeName & ":" & $FunctionName
+		EndIf
+	Else
+		$FunctionName = $TypeName & "." & $FunctionName
+	EndIf
+
+	; add the parameters in parenthesis
+	$FunctionName &= "("
+	If IsArray($Parameters) Then
+		For $i = 3 To UBound($Parameters) - 3 Step 3
+			$FunctionName &= $Parameters[$i + 1] & ", "
+		Next
+		If UBound($Parameters) > 3 Then
+			$FunctionName = StringTrimRight($FunctionName, 2)
+		EndIf
+		$FunctionName &= ")"
+	Else
+		$FunctionName &= "()"
+	EndIf
+
+	;write the file name
+	FileWrite($Output, "### " & $FunctionName & @CRLF)
+
+	;Write the exemple if any
+	If $Usage <> "" Then
+		FileWrite($Output, "``` lua")
+		FileWrite($Output, $Usage)
+		FileWrite($Output, "```" & @CRLF)
+	EndIf
+
+	;Write the description
+	FileWrite($Output, StringTrimRight($Block, StringLen($Block) - StringInStr($Block, "@function") + 1) & @CRLF)
+
+	; Write the parameters
+	FileWrite($Output, "#### Parameters" & @CRLF)
+	If IsArray($Parameters) Then
+		FileWrite($Output, ArrayToList($Parameters) & @CRLF)
+	EndIf
+
+	; Write the returns
+	FileWrite($Output, "#### Returns" & @CRLF)
+	If IsArray($Returns) Then
+		FileWrite($Output, ArrayToList($Returns) & @CRLF & @CRLF)
+	EndIf
+
+	; add to the list of function balises (useful for hyperlinks)
+	$RegexResult = ParseFunctionName($Block, $Declaration)
+	Local $URLBalise = $TypeName & "-" & $RegexResult[0] & "-"
+	If IsArray($Parameters) Then
+		For $i = 3 To UBound($Parameters) - 3 Step 3
+			$URLBalise &= StringLower($Parameters[$i + 1]) & "-"
+		Next
+	EndIf
+	$URLBalise = StringTrimRight($URLBalise, 1)
+	FileWrite($FunctionList, $URLBalise & @CRLF)
+	return $FunctionName
+EndFunc

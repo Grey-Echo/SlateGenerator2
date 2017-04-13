@@ -10,15 +10,17 @@ Global $OutputFolder = $CmdLine[2] ;@ScriptDir&"/source/index.html.md"
 
 Global $Log = FileOpen(@ScriptDir & "\SlateGenerator2.log", 2)
 Global $DataFile = FileOpen(@ScriptDir & "\TreeHierarchy.csv", 2)
+Global $FunctionList = FileOpen(@ScriptDir & "\FuctionList.txt", 2)
 
 #include "Parser.au3"
 #include "DataStorer.au3"
 #include "Writer.au3"
 
 Func ExitCleanly()
+	FileClose($DataFile)
+	FileClose($FunctionList)
 	FileWrite($Log, "SlateGenerator2 exited cleanly")
 	FileClose($Log)
-	FileClose($DataFile)
 EndFunc
 
 
@@ -107,7 +109,7 @@ ConsoleWrite("Done"&@CRLF)
 
 
 
-ConsoleWrite("3. Writing Markdown Documentation... "&@CRLF)
+ConsoleWrite("3. Writing Markdown Documentation")
 FileWrite($Log, @CRLF&@CRLF&@TAB&"INFO : Writing Markdown Documentation" & @CRLF)
 
 Local $CurrentOutput
@@ -117,6 +119,7 @@ Local $Line
 Local $CarretPos = 0
 Local $Results
 Local $Output
+Local $Declaration
 
 FileSetPos($DataFile, 0, $FILE_BEGIN)
 While True
@@ -138,11 +141,13 @@ While True
 	; get the comment block itself
 	$Results = ReadNextBlock($CurrentFile, $DataPos)
 	$Block = $Results[1]
+	$Declaration = $Results[2]
 
 	; choose the right function to write mardown depending on the type of comment block
 	$RegexResult = StringRegExp($Line, "\@K=(.+?),", $STR_REGEXPARRAYMATCH)
 
 	If $RegexResult[0] == "module" Then
+		ConsoleWrite(".")
 		; We need the name of the folder containing this particular source file
 		$RegexResult = StringRegExp($Line, "\@F=(.+?),", $STR_REGEXPARRAYMATCH)
 		$RegexResult = StringRegExp($RegexResult[0], "\\(.*)\\.*\.lua", $STR_REGEXPARRAYMATCH)
@@ -162,6 +167,11 @@ While True
 
 		; Now we can write the markdown for this type
 		WriteType($Block, $RegexResult[0], $CurrentOutput)
+	EndIf
+
+	If $RegexResult[0] == "function" Then
+		; We can write the markdown for this function
+		WriteFunction($Block, $Declaration, $CurrentOutput)
 	EndIf
 
 	FileClose($CurrentFile)

@@ -144,10 +144,9 @@ Func DataSort()
 		EndIf
 		$LineNb += 1
 	Wend
-	ConsoleWrite(""&@CRLF)
 	If FileGetSize(@ScriptDir & "\TreeHierarchy.csv") <> 0 Then
 		FileWrite($Log, "ERROR : Some items couldn't be sorted. Verify them in the file TreeHierarchy.csv"&@CRLF)
-		ConsoleWrite("INFO : Some items couldn't be sorted. Verify them in the file TreeHierarchy.csv"&@CRLF)
+		ConsoleWrite(@CRLF&"INFO : Some items couldn't be sorted. Verify them in the file TreeHierarchy.csv"&@CRLF)
 	EndIf
 	FileClose($DataFile)
 	$DataFile = $SortedDataFile

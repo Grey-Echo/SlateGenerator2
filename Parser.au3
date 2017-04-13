@@ -99,14 +99,14 @@ Func ParseForTags($Block, $Tag)
 	Local $RegexResult[1]
 	Local $RegexPos = 1
 
-	Local $Regex = $Tag&"\h([^\s]*)(?:\h)?([^\s]*)?(?:\h)?([^\n]*)?"
+	Local $Regex = $Tag&"(?m)\h([^\s]*)(?:\h)?([^\s]*)?(?:\h)?(.*)?$"
 	; For each tag
 	While True
 		$RegexResult = StringRegExp($Block, $Regex, $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
 		If $RegexPos == 0 Then ; We couldn't find any tag
 			If Not $DataArray[0] Then
-				Return " "
+				Return ""
 			Else
 				Return $DataArray
 			EndIf
@@ -216,13 +216,18 @@ Func ParseParams($CommentBlock, $Declaration)
 	WEnd
 
 	; compare these parameters with those found in the comment block
-	For $i=0 To $NbParam-1
-		If $ParamsFromDec[$i] <> $ParamsFromComment[($i*3)+1] Then
-			FileWrite($Log, "CAUTION: Parameters missmatch between the comment block and declaration "& @CRLF)
-			FileWrite($Log, $ParamsFromComment[($i*3)+1]& " -> " & $ParamsFromDec[$i]&@CRLF)
-			ExitLoop
-		EndIf
-	Next
+	If UBound($ParamsFromComment) <> UBound($ParamsFromDec)*3 Then
+		FileWrite($Log, "CAUTION: The number of parameters don't match between the comment block and declaration "& @CRLF)
+	Else
+
+		For $i=0 To $NbParam-1
+			If $ParamsFromDec[$i] <> $ParamsFromComment[($i*3)+1] Then
+				FileWrite($Log, "CAUTION: Parameters missmatch between the comment block and declaration "& @CRLF)
+				FileWrite($Log, $ParamsFromComment[($i*3)+1]& " -> " & $ParamsFromDec[$i]&@CRLF)
+				ExitLoop
+			EndIf
+		Next
+	EndIf
 
 	Return $ParamsFromComment
 EndFunc
