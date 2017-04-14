@@ -28,7 +28,7 @@ Func ReadNextBlock($File, $CarretPos)
 		EndIf
 	Until $IsCommentBlock
 
-	Local $CarretPosStart = FileGetPos($File) - StringLen($CurrentLine) - 2
+	Local $CarretPosStart = FileGetPos($File) - StringLen($CurrentLine) - 1
 
 	; Add the first line to our comment block
 	$RegExResult = StringRegExp($CurrentLine, "---(.*)", $STR_REGEXPARRAYMATCH)
@@ -50,18 +50,77 @@ Func ReadNextBlock($File, $CarretPos)
 		EndIf
 	Until Not $IsCommentBlock
 
+	; Ok, so now this is strange. If the comment block is class', we're going to have to check the
+	; next comment block. If this next comment block contains a field, that is the same name as the class, then this
+	; new comment block contains the whole informtion for the class. This is very shitty, but it's a workaround to
+	; make intellisense show classes info while programing
+	If ParseForOneTag($CommentBlock, "@type") Then
+		Local $CommentBlock2 = ""
+		Do
+			$CurrentLine = FileReadLine($File)
+			If @error Then
+				Local $ReturnArray[3] = [$CurrentCarretPos, "", ""]
+				Return $ReturnArray
+			ElseIf StringInStr($CurrentLine, "---") Then
+				$IsCommentBlock = True
+			EndIf
+		Until $IsCommentBlock
+
+		$RegExResult = StringRegExp($CurrentLine, "---(.*)", $STR_REGEXPARRAYMATCH)
+		If Not @error Then
+			$CommentBlock2 &= $RegExResult[0]&@CRLF
+		EndIf
+
+		; Yep, the next comment is the description of the class, let's read on !
+		FileWrite($Log, "DEBUG : "&$CurrentLine&" - "&ParseForOneTag($CommentBlock, "@type")&@CRLF)
+		If StringInStr($CurrentLine, ParseForOneTag($CommentBlock, "@type")) And StringInStr($CurrentLine, "extend") Then
+
+			Do
+				$CurrentLine = FileReadLine($File)
+				If StringInStr($CurrentLine, "--") Then
+					$RegExResult = StringRegExp($CurrentLine, "--(.*)", $STR_REGEXPARRAYMATCH)
+					If Not @error Then
+						$CommentBlock2 &= $RegExResult[0]&@CRLF
+					EndIf
+				Else
+					$IsCommentBlock = False
+				EndIf
+			Until Not $IsCommentBlock
+
+			; remove the line(s) with "@field" in the comment block. They are only needed for the intellisense hack
+			While 1
+				$RegexResult = StringRegExp($CommentBlock2, "(.*)@field(.*)", $STR_REGEXPARRAYMATCH, $RegexPos)
+				$RegexPos = @extended
+				If @extended == 0 Then ExitLoop
+
+				$CommentBlock2 = StringRegExpReplace($CommentBlock2, "(.*)@field(.*)", "", 1)
+			WEnd
+
+			; We also don't need the first line of the first comment block anymore...
+			$CommentBlock = StringRegExpReplace($CommentBlock, "(.*)", "", 1)
+
+			; append the description at the start of the comment block
+			$CommentBlock = $CommentBlock2&$CommentBlock
+			FileWrite($Log, "DEBUG : "&@CRLF&$CommentBlock&@CRLF)
+		EndIf
+	EndIf
+
+
+
+
 	; We'll take the next line, as it might be the declaration statement
 	$Declaration = $CurrentLine
 
 	; let's do some cleanup
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^\h+", "") ;remove leading whitespaces
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)\h+$", "") ;remove trailing whitespaces
-	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^[#]+", "") ; remove sequences of # at the start of a line
+	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^[#]+", "####") ; replace sequences of # at the start of a line by 4#### (h4)
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^\h+", "") ;remove leading whitespaces again now that we removed the "#"s
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)-{3,}", "") ;remove sequences of at least 3 "-" which will mess up markdown
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)={3,}", "") ; remove sequences of at least 3 "=" which will mess up markdown
 
 	Local $ReturnArray[4] = [$CurrentCarretPos, $CommentBlock, $Declaration, $CarretPosStart]
+	FileWrite($Log, "DEBUG2 : "&$Declaration&@CRLF)
 	Return $ReturnArray
 EndFunc
 
@@ -325,6 +384,24 @@ Func ReplaceHyperlinks($TempFile)
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{#([A-Z,_]+)\.([^#}\.]+)}[\(]?[\)]?", $NewURL, 1)
 	WEnd
+	While 1 ; Module#TYPE, this is a pretty narrow search pattern, so it may not be able to catch everything
+		$RegexResult = StringRegExp($StringFile, "\h(\w+)#(.*)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
+		$RegexPos = @extended
+		If @extended == 0 Then ExitLoop
+
+		$NewURL = " [" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-class) "
+		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
+		$StringFile = StringRegExpReplace($StringFile, "\h(\w+)#(.*)\h", $NewURL, 1)
+	WEnd
+	While 1 ; File.Module#TYPE, this is a pretty narrow search pattern, so it may not be able to catch everything
+		$RegexResult = StringRegExp($StringFile, "\h(\w+)\.(\w+)#(.*)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
+		$RegexPos = @extended
+		If @extended == 0 Then ExitLoop
+
+		$NewURL = " [" & $RegexResult[2] & "](#" & StringLower($RegexResult[2]) & "-class) "
+		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
+		$StringFile = StringRegExpReplace($StringFile, "\h(\w+)\.(\w+)#(.*)\h", $NewURL, 1)
+	WEnd
 
 	$StringFile = StringReplace($StringFile, "#nil", "nil")
 	$StringFile = StringReplace($StringFile, "#number", "number")
@@ -340,6 +417,19 @@ Func ReplaceHyperlinks($TempFile)
 
 		$NewPic = "![" & $RegexResult[0] & "](/includes/Pictures/" & $RegexResult[1] & "/"& $RegexResult[2]&")"
 		$StringFile = StringRegExpReplace($StringFile, "!\[(.*)\]\(.*\\(.*)\\(.*)\)", $NewPic, 1)
+	WEnd
+
+	;add formatting to titles inside a block
+	;$StringFile = StringRegExpReplace($StringFile, "(?m)^(\d(?:.*)\).*)$", "#### \0")
+	;FileWrite($Log, "DEBUG @error : "&@error&@CRLF)
+	;FileWrite($Log, "DEBUG @extended : "&@extended&@CRLF)
+
+	While 1
+		$RegexResult = StringRegExp($StringFile, "(?m)^(\d(?:(\.\d))*\)(.*))$", $STR_REGEXPARRAYMATCH, $RegexPos)
+		$RegexPos = @extended
+		If @extended == 0 Then ExitLoop
+
+		$StringFile = StringRegExpReplace($StringFile, "(?m)^(\d(?:(\.\d))*\)(.*))$", "##### "&$RegExResult[0], 1)
 	WEnd
 
 	Return $StringFile

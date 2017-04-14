@@ -68,17 +68,22 @@ Func WriteType($Block, $ModuleName, $Output)
 
 	; Add hierearchy info if necessary. Some cool ASCII drawing is going on !
 	If $ParentClass <> "ROOT" Then
-		FileWrite($Output, "**Inheritance : The " & $TypeName & " class inherits from the following parents**" & @CRLF)
+		FileWrite($Output, "<pre>" & @CRLF)
+		FileWrite($Output, "Inheritance : The " & $TypeName & " Class inherits from the following parents :" & @CRLF)
 		Local $Hierarchy = GetParents($TypeName)
 		Local $String = ""
 		Local $TabBuffer = @TAB
-		For $i=0 to UBound($Hierarchy)-1
+		$String &= $Hierarchy[0]&@CRLF
+		For $i=1 to UBound($Hierarchy)-1
 			$String &= $TabBuffer&"`-- "&$Hierarchy[$i]&@CRLF
 			$TabBuffer &= @TAB
 		Next
 		FileWrite($Output, $String)
+		FileWrite($Output, "</pre>" & @CRLF)
 	Else
+		FileWrite($Output, "<pre>" & @CRLF)
 		FileWrite($Output, "**The " & $TypeName & " class does not inherit**" & @CRLF)
+		FileWrite($Output, "</pre>" & @CRLF)
 	EndIf
 
 	; Copy the long description
@@ -108,6 +113,7 @@ Func WriteType($Block, $ModuleName, $Output)
 		FileWrite($Output, "#### Attributes" & @CRLF & @CRLF)
 		FileWrite($Output, ArrayToList($Fields) & @CRLF)
 	EndIf
+	FileWrite($Output, @CRLF)
 	Return $TypeName
 EndFunc
 
@@ -173,8 +179,10 @@ Func WriteFunction($Block, $Declaration, $Output)
 	; Write the returns
 	FileWrite($Output, "#### Returns" & @CRLF)
 	If IsArray($Returns) Then
-		FileWrite($Output, ArrayToList($Returns) & @CRLF & @CRLF)
+		FileWrite($Output, ArrayToList($Returns) & @CRLF)
 	EndIf
+
+	FileWrite($Output, @CRLF)
 
 	; add to the list of function balises (useful for hyperlinks)
 	$RegexResult = ParseFunctionName($Block, $Declaration)
