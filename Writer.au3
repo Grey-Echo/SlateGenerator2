@@ -1,15 +1,26 @@
 ; Takes an array and returns it in a markdown flavored list
-Func ArrayToList($Array)
+; If the list is a retun, then, there is no variable name...
+Func ArrayToList($Array, $Return)
 	$String = ""
 	$i = 0
 	do
 		$String &= "* "
 		$String &= $Array[$i] & " "
-		$String &= $Array[$i + 1]
-		If $Array[$i + 2] == "" or $Array[$i + 2] == " " Then
-			$String &= @CRLF
+
+		If $Return Then
+			If $Array[$i + 2] == "" or $Array[$i + 2] == " " Then
+				$String &= @CRLF
+			Else
+				$String &= " " & $Array[$i + 1] & " " & $Array[$i + 2] & @CRLF
+			EndIf
 		Else
-			$String &= " : " & $Array[$i + 2] & @CRLF
+
+			$String &= $Array[$i + 1]
+			If $Array[$i + 2] == "" or $Array[$i + 2] == " " Then
+				$String &= @CRLF
+			Else
+				$String &= " : " & $Array[$i + 2] & @CRLF
+			EndIf
 		EndIf
 		$i += 3
 	Until $i >= UBound($Array)
@@ -82,7 +93,7 @@ Func WriteType($Block, $ModuleName, $Output)
 		FileWrite($Output, "</pre>" & @CRLF)
 	Else
 		FileWrite($Output, "<pre>" & @CRLF)
-		FileWrite($Output, "**The " & $TypeName & " class does not inherit**" & @CRLF)
+		FileWrite($Output, "The " & $TypeName & " class does not inherit" & @CRLF)
 		FileWrite($Output, "</pre>" & @CRLF)
 	EndIf
 
@@ -110,8 +121,8 @@ Func WriteType($Block, $ModuleName, $Output)
 
 	; Add the Attributes
 	If IsArray($Fields) Then
-		FileWrite($Output, "#### Attributes" & @CRLF & @CRLF)
-		FileWrite($Output, ArrayToList($Fields) & @CRLF)
+		FileWrite($Output, "<h4> Attributes </h4>" & @CRLF & @CRLF)
+		FileWrite($Output, ArrayToList($Fields, False) & @CRLF)
 	EndIf
 	FileWrite($Output, @CRLF)
 	Return $TypeName
@@ -171,15 +182,15 @@ Func WriteFunction($Block, $Declaration, $Output)
 	FileWrite($Output, StringTrimRight($Block, StringLen($Block) - StringInStr($Block, "@function") + 1) & @CRLF)
 
 	; Write the parameters
-	FileWrite($Output, "#### Parameters" & @CRLF)
+	FileWrite($Output, "<h4> Parameters </h4>" & @CRLF)
 	If IsArray($Parameters) Then
-		FileWrite($Output, ArrayToList($Parameters) & @CRLF)
+		FileWrite($Output, ArrayToList($Parameters, False) & @CRLF)
 	EndIf
 
 	; Write the returns
-	FileWrite($Output, "#### Returns" & @CRLF)
+	FileWrite($Output, "<h4> Returns </h4>" & @CRLF)
 	If IsArray($Returns) Then
-		FileWrite($Output, ArrayToList($Returns) & @CRLF)
+		FileWrite($Output, ArrayToList($Returns, True) & @CRLF)
 	EndIf
 
 	FileWrite($Output, @CRLF)

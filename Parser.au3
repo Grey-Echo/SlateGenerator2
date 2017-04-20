@@ -28,7 +28,7 @@ Func ReadNextBlock($File, $CarretPos)
 		EndIf
 	Until $IsCommentBlock
 
-	Local $CarretPosStart = FileGetPos($File) - StringLen($CurrentLine) - 1
+	Local $CarretPosStart = FileGetPos($File) - StringLen($CurrentLine) - 2
 
 	; Add the first line to our comment block
 	$RegExResult = StringRegExp($CurrentLine, "---(.*)", $STR_REGEXPARRAYMATCH)
@@ -72,7 +72,6 @@ Func ReadNextBlock($File, $CarretPos)
 		EndIf
 
 		; Yep, the next comment is the description of the class, let's read on !
-		FileWrite($Log, "DEBUG : "&$CurrentLine&" - "&ParseForOneTag($CommentBlock, "@type")&@CRLF)
 		If StringInStr($CurrentLine, ParseForOneTag($CommentBlock, "@type")) And StringInStr($CurrentLine, "extend") Then
 
 			Do
@@ -97,12 +96,23 @@ Func ReadNextBlock($File, $CarretPos)
 			WEnd
 
 			; We also don't need the first line of the first comment block anymore...
-			$CommentBlock = StringRegExpReplace($CommentBlock, "(.*)", "", 1)
+			; $CommentBlock = StringRegExpReplace($CommentBlock, "(.*)", "", 1)
 
 			; append the description at the start of the comment block
 			$CommentBlock = $CommentBlock2&$CommentBlock
-			FileWrite($Log, "DEBUG : "&@CRLF&$CommentBlock&@CRLF)
 		EndIf
+
+
+		; We also need to check if the type is a list or a map. If so, the comment block does not describe a class, but a simple list / map.
+		; It will have the formatting of a class, though, because it's closer closer to the actual code, even though it is highly confusing.
+		; But it will only have 1 field : the list or map.
+		If StringInStr($CommentBlock, "@list") Then
+			$RegExResult = StringRegExp($CommentBlock, "@list\h<(.*?)>\h(.*)", $STR_REGEXPARRAYMATCH)
+			if not @error Then
+				$CommentBlock &= "@field #table["&$RegExResult[0]&"] "&$RegExResult[1]
+			EndIf
+		EndIf
+		; TODO : Add support for @map the same way...
 	EndIf
 
 
@@ -111,16 +121,17 @@ Func ReadNextBlock($File, $CarretPos)
 	; We'll take the next line, as it might be the declaration statement
 	$Declaration = $CurrentLine
 
+
+
 	; let's do some cleanup
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^\h+", "") ;remove leading whitespaces
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)\h+$", "") ;remove trailing whitespaces
-	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^[#]+", "####") ; replace sequences of # at the start of a line by 4#### (h4)
+	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^[#]+", "##### ")
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)^\h+", "") ;remove leading whitespaces again now that we removed the "#"s
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)-{3,}", "") ;remove sequences of at least 3 "-" which will mess up markdown
 	$CommentBlock = StringRegExpReplace($CommentBlock, "(?m)={3,}", "") ; remove sequences of at least 3 "=" which will mess up markdown
 
 	Local $ReturnArray[4] = [$CurrentCarretPos, $CommentBlock, $Declaration, $CarretPosStart]
-	FileWrite($Log, "DEBUG2 : "&$Declaration&@CRLF)
 	Return $ReturnArray
 EndFunc
 
@@ -291,7 +302,10 @@ Func ParseParams($CommentBlock, $Declaration)
 	Return $ParamsFromComment
 EndFunc
 
-
+; This does 3 things :
+; - Replace the hyperlinks with new ones
+; - change the stuff starting with # (#nil -> <u>Nil</u>)
+; - Replace pictures paths
 Func ReplaceHyperlinks($TempFile)
 	Local $StringFile = ""
 	Local $RegexResult
@@ -302,13 +316,14 @@ Func ReplaceHyperlinks($TempFile)
 
 	$StringFile = FileRead($TempFile)
 
-	; Replace HyperLinks Using RegEx
+	; Replace HyperLinks Using Regexs
+	; ---------------------------------------------------------
 	While 1 ; @{File.Module}
 		$RegexResult = StringRegExp($StringFile, "\@{([A-Z][^\.#}]+)\.([^\.#}]+)}", $STR_REGEXPARRAYMATCH, $RegexPos) ;
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = "[" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-module)"
+		$NewURL = "[" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-module-)"
 		;FileWrite($Log, "Module : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{([A-Z][^\.#}]+)\.([^\.#}]+)}", $NewURL, 1)
 	WEnd
@@ -317,7 +332,7 @@ Func ReplaceHyperlinks($TempFile)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = "[" & $RegexResult[0] & "](#" & StringLower($RegexResult[0]) & "-module)"
+		$NewURL = "[" & $RegexResult[0] & "](#" & StringLower($RegexResult[0]) & "-module-)"
 		;FileWrite($Log, "Module : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{([A-Z][^\.#}]+)}", $NewURL, 1)
 	WEnd
@@ -326,7 +341,7 @@ Func ReplaceHyperlinks($TempFile)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = "[" & $RegexResult[2] & "](#" & StringLower($RegexResult[2]) & "-class)"
+		$NewURL = "[" & $RegexResult[2] & "](#" & StringLower($RegexResult[2]) & "-class-)"
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{([A-Z][^\.#}]+)\.([A-Z][^\.#}]+)#([A-Z,_]+)}", $NewURL, 1)
 	WEnd
@@ -335,7 +350,7 @@ Func ReplaceHyperlinks($TempFile)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = "[" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-class)"
+		$NewURL = "[" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-class-)"
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{([A-Z][^\.#}]+)#([A-Z,_]+)}", $NewURL, 1)
 	WEnd
@@ -344,25 +359,25 @@ Func ReplaceHyperlinks($TempFile)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = "[" & $RegexResult[0] & "](#" & StringLower($RegexResult[0]) & "-class)"
+		$NewURL = "[" & $RegexResult[0] & "](#" & StringLower($RegexResult[0]) & "-class-)"
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{#([A-Z,_]+)}", $NewURL, 1)
 	WEnd
 	While 1 ; #TYPE&@CR
-		$RegexResult = StringRegExp($StringFile, "\h#([A-Z,_]+)", $STR_REGEXPARRAYMATCH, $RegexPos)
+		$RegexResult = StringRegExp($StringFile, "\h#([A-Z,_]+)\s", $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = " [" & $RegexResult[0] & "](#" & StringLower($RegexResult[0]) & "-class)"&@CRLF
+		$NewURL = " [" & $RegexResult[0] & "](#" & StringLower($RegexResult[0]) & "-class-)"&@CRLF
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
-		$StringFile = StringRegExpReplace($StringFile, "\h#([A-Z,_]+)", $NewURL, 1)
+		$StringFile = StringRegExpReplace($StringFile, "\h#([A-Z,_]+)\s", $NewURL, 1)
 	WEnd
 	While 1 ; @{File.Module#TYPE.Function}(), catches the parenthesis
 		$RegexResult = StringRegExp($StringFile, "\@{([A-Z][^#}\.]+)\.([A-Z][^#}\.]+)#([A-Z,_]+)\.([^#\.]+)}[\(]?[\)]?", $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = FindInFunctionList($RegexResult[2] & "-" & $RegexResult[3])
+		$NewURL = FindInFunctionList($RegexResult[2] & "-" & $RegexResult[3]&"-")
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{([A-Z][^#}\.]+)\.([A-Z][^#}\.]+)#([A-Z,_]+)\.([^#\.]+)}[\(]?[\)]?", $NewURL, 1)
 	WEnd
@@ -371,7 +386,7 @@ Func ReplaceHyperlinks($TempFile)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = FindInFunctionList($RegexResult[1] & "-" & $RegexResult[2])
+		$NewURL = FindInFunctionList($RegexResult[1] & "-" & $RegexResult[2]&"-")
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{([A-Z][^#}\.]+)#([A-Z,_]+)\.([^#}\.]+)}[\(]?[\)]?", $NewURL, 1)
 	WEnd
@@ -380,36 +395,49 @@ Func ReplaceHyperlinks($TempFile)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = FindInFunctionList($RegexResult[0] & "-" & $RegexResult[1])
+		$NewURL = FindInFunctionList($RegexResult[0] & "-" & $RegexResult[1]&"-")
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
 		$StringFile = StringRegExpReplace($StringFile, "\@{#([A-Z,_]+)\.([^#}\.]+)}[\(]?[\)]?", $NewURL, 1)
 	WEnd
-	While 1 ; Module#TYPE, this is a pretty narrow search pattern, so it may not be able to catch everything
-		$RegexResult = StringRegExp($StringFile, "\h(\w+)#(.*)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
+	While 1 ; Module#TYPE
+		$RegexResult = StringRegExp($StringFile, "\h(\w+[^\h\_])#(.*?)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = " [" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-class) "
+		$NewURL = " [" & $RegexResult[1] & "](#" & StringLower($RegexResult[1]) & "-class-) "
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
-		$StringFile = StringRegExpReplace($StringFile, "\h(\w+)#(.*)\h", $NewURL, 1)
+		$StringFile = StringRegExpReplace($StringFile, "\h(\w+[^\h\_])#(.*?)\h", $NewURL, 1)
 	WEnd
-	While 1 ; File.Module#TYPE, this is a pretty narrow search pattern, so it may not be able to catch everything
-		$RegexResult = StringRegExp($StringFile, "\h(\w+)\.(\w+)#(.*)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
+	While 1 ; File.Module#TYPE
+		$RegexResult = StringRegExp($StringFile, "\h(\w+)\.(\w+)#(.*?)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
-		$NewURL = " [" & $RegexResult[2] & "](#" & StringLower($RegexResult[2]) & "-class) "
+		$NewURL = " [" & $RegexResult[2] & "](#" & StringLower($RegexResult[2]) & "-class-) "
 		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
-		$StringFile = StringRegExpReplace($StringFile, "\h(\w+)\.(\w+)#(.*)\h", $NewURL, 1)
+		$StringFile = StringRegExpReplace($StringFile, "\h(\w+)\.(\w+)#(.*?)\h", $NewURL, 1)
+	WEnd
+	While 1 ; #TYPE.type (nested type... really annoying and confusing lua stuff)
+		$RegexResult = StringRegExp($StringFile, "\h#([A-Z,_]+)\.(\w+)\h", $STR_REGEXPARRAYMATCH, $RegexPos)
+		$RegexPos = @extended
+		If @extended == 0 Then ExitLoop
+
+		$NewURL = " [" & $RegexResult[1] & "](#" &StringLower($RegexResult[0])& "-"& StringLower($RegexResult[1]) & "-class-)"
+		;FileWrite($Log, "Class : " & $RegexPos & " : " & _ArrayToString($RegexResult) & " -> " & $NewURL & @CRLF)
+		$StringFile = StringRegExpReplace($StringFile, "\h#([A-Z,_]+)\.(\w+)\h", $NewURL, 1)
 	WEnd
 
-	$StringFile = StringReplace($StringFile, "#nil", "nil")
-	$StringFile = StringReplace($StringFile, "#number", "number")
-	$StringFile = StringReplace($StringFile, "#boolean", "boolean")
-	$StringFile = StringReplace($StringFile, "#string", "string")
-	$StringFile = StringReplace($StringFile, "#table", "table[]")
+	; Clean stuff with #
+	; ---------------------------------------------------------
+	$StringFile = StringReplace($StringFile, "#nil", "<u>Nil</u>")
+	$StringFile = StringReplace($StringFile, "#number", "<u>Number</u>")
+	$StringFile = StringReplace($StringFile, "#boolean", "<u>Boolean</u>")
+	$StringFile = StringReplace($StringFile, "#string", "<u>String</u>")
+	$StringFile = StringReplace($StringFile, "#table", "<u>List[]</u>")
+	$StringFile = StringReplace($StringFile, "#function", "<u>Function()</u>")
 
 	; And replace the pictures Path if any
+	; ---------------------------------------------------------
 	While 1
 		$RegexResult = StringRegExp($StringFile, "!\[(.*)\]\(.*\\(.*)\\(.*)\)", $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
@@ -419,16 +447,12 @@ Func ReplaceHyperlinks($TempFile)
 		$StringFile = StringRegExpReplace($StringFile, "!\[(.*)\]\(.*\\(.*)\\(.*)\)", $NewPic, 1)
 	WEnd
 
-	;add formatting to titles inside a block
-	;$StringFile = StringRegExpReplace($StringFile, "(?m)^(\d(?:.*)\).*)$", "#### \0")
-	;FileWrite($Log, "DEBUG @error : "&@error&@CRLF)
-	;FileWrite($Log, "DEBUG @extended : "&@extended&@CRLF)
-
 	While 1
 		$RegexResult = StringRegExp($StringFile, "(?m)^(\d(?:(\.\d))*\)(.*))$", $STR_REGEXPARRAYMATCH, $RegexPos)
 		$RegexPos = @extended
 		If @extended == 0 Then ExitLoop
 
+		;$StringFile = StringRegExpReplace($StringFile, "(?m)^(\d(?:(\.\d))*\)(.*))$", "<h4>"&$RegExResult[0]&"</h4>", 1)
 		$StringFile = StringRegExpReplace($StringFile, "(?m)^(\d(?:(\.\d))*\)(.*))$", "##### "&$RegExResult[0], 1)
 	WEnd
 
